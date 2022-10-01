@@ -10,6 +10,10 @@ The format is "(token:start value\~end value)" (please don't mix up the tilde "\
 1. Copy the file in the scripts-folder to the scripts-folder from https://github.com/AUTOMATIC1111/stable-diffusion-webui
 2. Add `moviepy==1.0.3` to requirements_versions.txt
 
+# Show your work
+
+If you want to you can send me a link (with prompt) and I'll add it to [USER_EXAMPLES.md](USER_EXAMPLES.md).
+
 # Example:
 
 Prompt: "photo of (cat:1\~0) or (dog:0\~1)"
