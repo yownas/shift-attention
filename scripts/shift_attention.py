@@ -1,3 +1,10 @@
+# Shift Attention script for AUTOMATIC1111/stable-diffusion-webui
+#
+# https://github.com/yownas/shift-attention
+#
+# Give a prompt like: "photo of (cat:1~0) or (dog:0~1)"
+# Generates a sequence of images, lowering the weight of "cat" from 1 to 0 and increasing the weight of "dog" from 0 to 1.
+
 import os
 import re
 import modules.scripts as scripts
