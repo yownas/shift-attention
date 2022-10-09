@@ -10,6 +10,7 @@ import re
 import modules.scripts as scripts
 import gradio as gr
 import math
+import numpy
 import random
 from modules.processing import Processed, process_images, fix_seed
 from modules.shared import opts, cmd_opts, state
@@ -76,7 +77,7 @@ class Script(scripts.Script):
                  end_weight = m.group(2)
     
                  if end_weight is not None:
-                     res += ':' + str(float(start_weight) + ((float(end_weight) - float(start_weight)) * distance))
+                     res += ':' + str(numpy.float16(float(start_weight) + ((float(end_weight) - float(start_weight)) * distance)))
                  elif start_weight is not None:
                      res += start_weight
                  else:
