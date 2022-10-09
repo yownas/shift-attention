@@ -117,6 +117,9 @@ class Script(scripts.Script):
         initial_prompt = p.prompt
 
         for i in range(int(steps) + 1):
+            if state.interrupted:
+                break
+
             p.prompt = shift_attention(initial_prompt, float(i / int(steps)))
 
             proc = process_images(p)
