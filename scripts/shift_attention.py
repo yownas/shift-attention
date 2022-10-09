@@ -58,8 +58,8 @@ class Script(scripts.Script):
 \\|
 \(|
 \[|
-:([+-]?[.\d]+)~([+-]?[.\d]+)\)|
-:([+-]?[.\d]+)\)|
+:([+-]?[.\d]+)~([+-]?[.\d]+)|
+:([+-]?[.\d]+)|
 \)|
 ]|
 [^\\()\[\]:]+|
@@ -76,7 +76,7 @@ class Script(scripts.Script):
                  end_weight = m.group(2)
     
                  if end_weight is not None:
-                     res += ':' + str(float(start_weight) + ((float(end_weight) - float(start_weight)) * distance)) + ')'
+                     res += ':' + str(float(start_weight) + ((float(end_weight) - float(start_weight)) * distance))
                  elif start_weight is not None:
                      res += start_weight
                  else:

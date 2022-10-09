@@ -4,7 +4,7 @@ In AUTOMATIC1111/stable-diffusion-webui, generate a sequence of images shifting 
 
 This script enables you to give a range to the weight of tokens in a prompt and then generate a sequence of images stepping from the first one to the second.
 
-The format is "(token:start value\~end value)" (please don't mix up the tilde "\~" for a minus sign "-"). Values can be anything you want, but usable values are probably around -1.5 to 1.5.
+The format is "(token:start value\~end value)" or ":start value\~end value" (please don't mix up the tilde "\~" for a minus sign "-"). Values can be anything you want, but usable values are probably around -1.5 to 1.5.
 
 # Installation
 1. Copy the file in the scripts-folder to the scripts-folder from https://github.com/AUTOMATIC1111/stable-diffusion-webui
