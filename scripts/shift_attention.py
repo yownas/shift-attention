@@ -106,8 +106,9 @@ class Script(scripts.Script):
         shift_path = os.path.join(shift_path, f"{shift_number:05}")
         p.outpath_samples = shift_path
 
-        # Force Batch Count to 1.
+        # Force Batch Count and Batch Size to 1.
         p.n_iter = 1
+        p.batch_size = 1
 
         total_images = int(steps)
         print(f"Generating {total_images} images.")
