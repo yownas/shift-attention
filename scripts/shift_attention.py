@@ -50,38 +50,16 @@ class Script(scripts.Script):
         return result + 1
 
     def run(self, p, steps, save_video, video_fps, show_images):
-        re_attention_span = re.compile(r"""
-\\\(|
-\\\)|
-\\\[|
-\\]|
-\\\\|
-\\|
-\(|
-\[|
-:([+-]?[.\d]+)~([+-]?[.\d]+)|
-:([+-]?[.\d]+)|
-\)|
-]|
-[^\\()\[\]:]+|
-:
-""", re.X)
+        re_attention_span = re.compile(r"([.\d]+)~([.\d]+)", re.X)
 
         def shift_attention(text, distance):
 
-            res = ""
+            def inject_value(distance, match_obj):
+                start_weight = float(match_obj.group(1))
+                end_weight = float(match_obj.group(2))
+                return str(start_weight + (end_weight - start_weight) * distance)
 
-            for m in re_attention_span.finditer(text):
-                 text = m.group(0)
-                 start_weight = m.group(1)
-                 end_weight = m.group(2)
-    
-                 if end_weight is not None:
-                     res += ':' + str(numpy.float16(float(start_weight) + ((float(end_weight) - float(start_weight)) * distance)))
-                 elif start_weight is not None:
-                     res += start_weight
-                 else:
-                     res += text
+            res = re.sub(re_attention_span, lambda match_obj: inject_value(distance, match_obj), text)
             return res
 
         initial_info = None
