@@ -88,6 +88,9 @@ class Script(scripts.Script):
         p.n_iter = 1
         p.batch_size = 1
 
+        # Make sure seed is fixed
+        fix_seed(p)
+
         total_images = int(steps)
         print(f"Generating {total_images} images.")
 
