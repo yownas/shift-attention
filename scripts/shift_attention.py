@@ -50,7 +50,7 @@ class Script(scripts.Script):
         return result + 1
 
     def run(self, p, steps, save_video, video_fps, show_images):
-        re_attention_span = re.compile(r"([.\d]+)~([.\d]+)", re.X)
+        re_attention_span = re.compile(r"([\-.\d]+)~([\-.\d]+)", re.X)
 
         def shift_attention(text, distance):
 
