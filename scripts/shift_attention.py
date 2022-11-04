@@ -4,6 +4,7 @@
 #
 # Give a prompt like: "photo of (cat:1~0) or (dog:0~1)"
 # Generates a sequence of images, lowering the weight of "cat" from 1 to 0 and increasing the weight of "dog" from 0 to 1.
+# Will also support multiple numbers. "(cat:1~0~1)" will go from cat:1 to cat:0 to cat:1 streched over the number of steps
 
 import os
 import re
@@ -50,14 +51,21 @@ class Script(scripts.Script):
         return result + 1
 
     def run(self, p, steps, save_video, video_fps, show_images):
-        re_attention_span = re.compile(r"([\-.\d]+)~([\-.\d]+)", re.X)
+        re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
 
+            #def inject_value(distance, match_obj):
+            #    start_weight = float(match_obj.group(1))
+            #    end_weight = float(match_obj.group(2))
+            #    return str(start_weight + (end_weight - start_weight) * distance)
+
             def inject_value(distance, match_obj):
-                start_weight = float(match_obj.group(1))
-                end_weight = float(match_obj.group(2))
-                return str(start_weight + (end_weight - start_weight) * distance)
+                a = match_obj.group(1).split('~')
+                l = len(a) - 1
+                q1 = int(math.floor(distance*l))
+                q2 = int(math.ceil(distance*l))
+                return str( float(a[q1]) + ((float(a[q2]) - float(a[q1])) * (distance * l - q1)) )
 
             res = re.sub(re_attention_span, lambda match_obj: inject_value(distance, match_obj), text)
             return res
