@@ -6,6 +6,8 @@ This script enables you to give a range to the weight of tokens in a prompt and 
 
 The format is "(token:start value\~end value)" or ":start value\~end value" (please don't mix up the tilde "\~" for a minus sign "-"). Values can be anything you want, but usable values are probably around -1.5 to 1.5.
 
+It will also allow multiple values, like this "(token:value1\~value2\~value3...\~valueN)". This can be used if you want the value to stay static for a while "(cat:0.1~0.1~1)" or jump between values "(dog:1\~0.5\~1\~-0.3)". The number of values do not have to be the same for every token in the prompt, the interpolation between them be spread out of the the number of steps you given.
+
 # Installation
 1. Copy the file in the scripts-folder to the scripts-folder from https://github.com/AUTOMATIC1111/stable-diffusion-webui
 2. Add `moviepy==1.0.3` to requirements_versions.txt
