@@ -9,6 +9,14 @@ The format is "(token:start value\~end value)" or ":start value\~end value" (ple
 It will also allow multiple values, like this "(token:value1\~value2\~value3...\~valueN)". This can be used if you want the value to stay static for a while "(cat:0.1~0.1~1)" or jump between values "(dog:1\~0.5\~1\~-0.3)". The number of values do not have to be the same for every token in the prompt, the interpolation between them be spread out of the the number of steps you given.
 
 # Installation
+
+Easiest way to install it is to:
+1. Go to the "Extensions" tab in the webui
+2. Click on the "Install from URL" tab
+3. Paste https://github.com/yownas/shift-attention.git into "URL for extension's git repository" and click install
+4. ("Optional". You will need to restart the webui for dependensies to be installed or you won't be able to generate video files.)
+
+Manual install:
 1. Copy the file in the scripts-folder to the scripts-folder from https://github.com/AUTOMATIC1111/stable-diffusion-webui
 2. Add `moviepy==1.0.3` to requirements_versions.txt
 
