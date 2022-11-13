@@ -106,12 +106,14 @@ class Script(scripts.Script):
         state.job_count = total_images
 
         initial_prompt = p.prompt
+        initial_negative_prompt = p.negative_prompt
 
         for i in range(int(steps) + 1):
             if state.interrupted:
                 break
 
             p.prompt = shift_attention(initial_prompt, float(i / int(steps)))
+            p.negative_prompt = shift_attention(initial_negative_prompt, float(i / int(steps)))
 
             proc = process_images(p)
             if initial_info is None:
