@@ -55,11 +55,6 @@ class Script(scripts.Script):
 
         def shift_attention(text, distance):
 
-            #def inject_value(distance, match_obj):
-            #    start_weight = float(match_obj.group(1))
-            #    end_weight = float(match_obj.group(2))
-            #    return str(start_weight + (end_weight - start_weight) * distance)
-
             def inject_value(distance, match_obj):
                 a = match_obj.group(1).split('~')
                 l = len(a) - 1
