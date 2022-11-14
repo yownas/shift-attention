@@ -80,12 +80,13 @@ class Script(scripts.Script):
                 print(f"moviepy python module not installed. Will not be able to generate video.")
                 return Processed(p, images, p.seed)
 
-        # Custom seed travel saving
+        # Custom folder for saving images/animations
         shift_path = os.path.join(p.outpath_samples, "shift")
         os.makedirs(shift_path, exist_ok=True)
         shift_number = Script.get_next_sequence_number(shift_path)
         shift_path = os.path.join(shift_path, f"{shift_number:05}")
         p.outpath_samples = shift_path
+        if save_video: os.makedirs(shift_path, exist_ok=True)
 
         # Force Batch Count and Batch Size to 1.
         p.n_iter = 1
