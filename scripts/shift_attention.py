@@ -29,9 +29,11 @@ class Script(scripts.Script):
 
         show_images = gr.Checkbox(label='Show generated images in ui', value=True)
         save_video = gr.Checkbox(label='Save results as video', value=True)
-        video_fps = gr.Number(label='Frames per second', value=30)
+        with gr.Row():
+            video_fps = gr.Number(label='Frames per second', value=30)
+            lead_inout = gr.Number(label='Number of frames for lead in/out', value=0)
 
-        return [steps, save_video, video_fps, show_images]
+        return [steps, save_video, video_fps, show_images, lead_inout]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -50,7 +52,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, save_video, video_fps, show_images):
+    def run(self, p, steps, save_video, video_fps, show_images, lead_inout):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -67,6 +69,7 @@ class Script(scripts.Script):
 
         initial_info = None
         images = []
+        lead_inout = int(lead_inout)
 
         if not save_video and not show_images:
             print(f"Nothing to do. You should save the results as a video or show the generated images.")
@@ -117,8 +120,10 @@ class Script(scripts.Script):
             images += proc.images
 
         if save_video:
-            clip = ImageSequenceClip.ImageSequenceClip([np.asarray(i) for i in images], fps=video_fps)
-            clip.write_videofile(os.path.join(shift_path, f"shift-{shift_number:05}.mp4"), verbose=False, logger=None)
+            frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
+            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)
+            filename = f"shift-{shift_number:05}.mp4"
+            clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
 
         processed = Processed(p, images if show_images else [], p.seed, initial_info)
 
