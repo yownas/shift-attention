@@ -14,8 +14,14 @@ import math
 import numpy
 import random
 from modules.processing import Processed, process_images, fix_seed
-from modules.shared import opts, cmd_opts, state
+from modules.shared import opts, cmd_opts, state, sd_upscalers
+from modules.images import resize_image
 
+__ = lambda key, value=None: opts.data.get(f'customscript/seed_travel.py/txt2img/{key}/value', value)
+
+DEFAULT_UPSCALE_METH   = __('Upscaler', 'Lanczos')
+DEFAULT_UPSCALE_RATIO  = __('Upscale ratio', 1.0)
+CHOICES_UPSCALER  = [x.name for x in sd_upscalers]
 
 class Script(scripts.Script):
     def title(self):
@@ -32,8 +38,11 @@ class Script(scripts.Script):
         with gr.Row():
             video_fps = gr.Number(label='Frames per second', value=30)
             lead_inout = gr.Number(label='Number of frames for lead in/out', value=0)
+        with gr.Row():
+            upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
+            upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
 
-        return [steps, save_video, video_fps, show_images, lead_inout]
+        return [steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -52,7 +61,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, save_video, video_fps, show_images, lead_inout):
+    def run(self, p, steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -117,7 +126,15 @@ class Script(scripts.Script):
             proc = process_images(p)
             if initial_info is None:
                 initial_info = proc.info
-            images += proc.images
+
+            # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
+            tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
+            if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
+                image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
+            else:
+                image = proc.images
+
+            images += image
 
         if save_video:
             frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
