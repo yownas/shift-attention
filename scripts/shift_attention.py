@@ -12,6 +12,9 @@ import modules.scripts as scripts
 import gradio as gr
 import math
 import numpy
+from torchmetrics import StructuralSimilarityIndexMeasure 
+from torchvision import transforms
+import torch
 import random
 from modules.processing import Processed, process_images, fix_seed
 from modules.shared import opts, cmd_opts, state, sd_upscalers
@@ -31,9 +34,10 @@ class Script(scripts.Script):
         return True
 
     def ui(self, is_img2img):
-        steps = gr.Number(label='Steps', value=10)
-
-        show_images = gr.Checkbox(label='Show generated images in ui', value=True)
+        steps = gr.Number(label='Steps (minimum)', value=10)
+        with gr.Row():
+            show_images = gr.Checkbox(label='Show generated images in ui', value=True)
+            ssim_diff = gr.Slider(label='SSIM threshold (1.0=exact copy)', value=0.0, minimum=0.0, maximum=1.0, step=0.01)
         save_video = gr.Checkbox(label='Save results as video', value=True)
         with gr.Row():
             video_fps = gr.Number(label='Frames per second', value=30)
@@ -42,7 +46,7 @@ class Script(scripts.Script):
             upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
             upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
 
-        return [steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio]
+        return [steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -61,7 +65,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio):
+    def run(self, p, steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -78,7 +82,9 @@ class Script(scripts.Script):
 
         initial_info = None
         images = []
+        dists = []
         lead_inout = int(lead_inout)
+        tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
 
         if not save_video and not show_images:
             print(f"Nothing to do. You should save the results as a video or show the generated images.")
@@ -116,26 +122,82 @@ class Script(scripts.Script):
         initial_prompt = p.prompt
         initial_negative_prompt = p.negative_prompt
 
+        # Generate all the steps
         for i in range(int(steps) + 1):
             if state.interrupted:
                 break
 
-            p.prompt = shift_attention(initial_prompt, float(i / int(steps)))
-            p.negative_prompt = shift_attention(initial_negative_prompt, float(i / int(steps)))
+            distance = float(i / int(steps))
+            p.prompt = shift_attention(initial_prompt, distance)
+            p.negative_prompt = shift_attention(initial_negative_prompt, distance)
 
             proc = process_images(p)
             if initial_info is None:
                 initial_info = proc.info
 
             # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
-            tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
             if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
                 image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
             else:
                 image = [proc.images[0]]
 
             images += image
+            dists += [distance]
 
+        # SSIM
+        if ssim_diff > 0:
+            ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
+            # transform = transforms.Compose([transforms.Resize((x/2,y/2)), transforms.ToTensor()])
+            transform = transforms.Compose([transforms.ToTensor()])
+
+            check = True
+
+            done = 0
+            while(check):
+                if state.interrupted:
+                    break
+                check = False
+                for i in range(done, len(images)-1):
+                    # Check distance between i and i+1
+
+                    a = transform(images[i].convert('RGB')).unsqueeze(0)
+                    b = transform(images[i+1].convert('RGB')).unsqueeze(0)
+                    d = ssim(a, b)
+
+                    if d < ssim_diff and (dists[i+1] - dists[i]) > 1/10000:
+                        # FIXME debug output
+                        print(f"SSIM: {dists[i]} <-> {dists[i+1]} = {d} ({len(images)} images total)")
+
+                        # Add image and run check again
+                        check = True
+                        new_dist = (dists[i] + dists[i+1])/2.0
+
+                        p.prompt = shift_attention(initial_prompt, new_dist)
+                        p.negative_prompt = shift_attention(initial_negative_prompt, new_dist)
+
+                        proc = process_images(p)
+
+                        if initial_info is None:
+                            initial_info = proc.info
+                        
+                        # FIXME duplicated code
+                        # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
+                        if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
+                            image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
+                        else:
+                            image = [proc.images[0]]
+
+                        #images = images[0:i] + [image] + images[i:]
+                        images.insert(i+1, image[0])
+                        dists.insert(i+1, new_dist)
+                        break;
+                    else:
+                        done = i
+            # DEBUG
+            print(dists)
+            
+
+        # Save video
         if save_video:
             frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
             clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)

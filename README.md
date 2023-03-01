@@ -20,6 +20,24 @@ Manual install:
 1. Copy the file in the scripts-folder to the scripts-folder from https://github.com/AUTOMATIC1111/stable-diffusion-webui
 2. Add `moviepy==1.0.3` to requirements_versions.txt
 
+# Usage
+
+`Steps (minimum)`: Number of steps to take from the initial image. The ranges you specified in the prompt will be spread out over these steps. "(minimum)" refers to SSIM usage (see below).
+
+`Show generated images in ui`: Disable this if you generate a lot of steps to make life easier for your browser.
+
+`SSIM threshold (1.0=exact copy)`: If this is set to something other than 0, the script will first generate the steps you've specified above, but then take a second pass and fill in the gaps between images that differ too much according to Structual Similarity Index Metric [(pdf)](https://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf). A good value depends a lot on which model and prompt you use, but 0.7 to 0.8 should be a good starting value. More than 0.95 will probably not improve much. If you want a very smooth video you should use something like [Flowframes](https://nmkd.itch.io/flowframes).
+
+`Save results as video`: Makes videos.
+
+`Frames per second`: The fps of the video.
+
+`Number of frames for lead in/out`: Amount of frames to be padded with a static image at the start and ending of the video. So you'll get a short pause before the video start/ends.
+
+`Upscaler`: Choose upscale method to be applied to the images before made into a video.
+
+`Upscale ratio`: How much the images should be upscaled. A value of 0 or 1 will disable scaling.
+
 # Show your work
 
 If you want to you can send me a link (with prompt) and I'll add it to [USER_EXAMPLES.md](USER_EXAMPLES.md).
