@@ -17,3 +17,10 @@ Seed: 2295097780
 Script: Shift attention (https://github.com/yownas/shift-atten...)
 
 Steps: 450 FPS: 15
+
+---
+
+Same prompt, 10 initial steps and SSIM threshold: 0.975. This is probably as high as you can go with this prompt and the old SD1.4 model. The animation will stutter when it tries to make too small changes, not sure if it is a floatingpoint error or simply the model that reach a point where even a very small change will result in a "big" change in the image.
+
+https://user-images.githubusercontent.com/13150150/222804476-06ea4014-3fab-41ce-9540-6c09a561bf59.mp4
+
