@@ -30,6 +30,8 @@ Manual install:
 
 `Save results as video`: Makes videos.
 
+`SSIM CenterCrop% (0 to disable)`: Crop a square from the center of the image to be used for SSIM. In percent of the height or width (whichever is smaller). 0 will use the entire image. Only checking a small part of the image makes SSIM more sensitive. Be prepared to lower SSIM threshold to 0.4 to 0.5 if you use this.
+
 `Frames per second`: The fps of the video.
 
 `Number of frames for lead in/out`: Amount of frames to be padded with a static image at the start and ending of the video. So you'll get a short pause before the video start/ends.
@@ -37,6 +39,8 @@ Manual install:
 `Upscaler`: Choose upscale method to be applied to the images before made into a video.
 
 `Upscale ratio`: How much the images should be upscaled. A value of 0 or 1 will disable scaling.
+
+`SSIM minimum step`: Smallest "step" SSIM is allowed to take. Sometimes animations can't me smoothed out, no matter how small steps you take. It is better to let the script give up and have a single skip than force it and get an animation that flickers.
 
 # Show your work
 

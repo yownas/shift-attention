@@ -38,15 +38,18 @@ class Script(scripts.Script):
         with gr.Row():
             show_images = gr.Checkbox(label='Show generated images in ui', value=True)
             ssim_diff = gr.Slider(label='SSIM threshold (1.0=exact copy)', value=0.0, minimum=0.0, maximum=1.0, step=0.01)
-        save_video = gr.Checkbox(label='Save results as video', value=True)
+        with gr.Row():
+            save_video = gr.Checkbox(label='Save results as video', value=True)
+            ssim_ccrop = gr.Slider(label='SSIM CenterCrop% (0 to disable)', value=0, minimum=0, maximum=100, step=1)
         with gr.Row():
             video_fps = gr.Number(label='Frames per second', value=30)
             lead_inout = gr.Number(label='Number of frames for lead in/out', value=0)
         with gr.Row():
             upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
             upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
+        substep_min = gr.Number(label='SSIM minimum step', value=0.0001)
 
-        return [steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff]
+        return [steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, substep_min]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -65,7 +68,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff):
+    def run(self, p, steps, save_video, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, substep_min):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -147,10 +150,16 @@ class Script(scripts.Script):
         # SSIM
         if ssim_diff > 0:
             ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
-            # transform = transforms.Compose([transforms.Resize((x/2,y/2)), transforms.ToTensor()])
+            if ssim_ccrop == 0:
+                transform = transforms.Compose([transforms.ToTensor()])
+            else:
+                transform = transforms.Compose([transforms.CenterCrop(min(tgt_w, tgt_h)*(ssim_ccrop/100)), transforms.ToTensor()])
+
             transform = transforms.Compose([transforms.ToTensor()])
 
             check = True
+            skip_count = 0
+            skip_ssim_min = 1.0
 
             done = 0
             while(check):
@@ -164,9 +173,9 @@ class Script(scripts.Script):
                     b = transform(images[i+1].convert('RGB')).unsqueeze(0)
                     d = ssim(a, b)
 
-                    if d < ssim_diff and (dists[i+1] - dists[i]) > 1/10000:
+                    if d < ssim_diff and (dists[i+1] - dists[i]) > substep_min:
                         # FIXME debug output
-                        print(f"SSIM: {dists[i]} <-> {dists[i+1]} = {d} ({len(images)} images total)")
+                        print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
 
                         # Add image and run check again
                         check = True
@@ -175,12 +184,12 @@ class Script(scripts.Script):
                         p.prompt = shift_attention(initial_prompt, new_dist)
                         p.negative_prompt = shift_attention(initial_negative_prompt, new_dist)
 
+                        print(f"Process: {new_dist}")
                         proc = process_images(p)
 
                         if initial_info is None:
                             initial_info = proc.info
                         
-                        # FIXME duplicated code
                         # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
                         if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
                             image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
@@ -192,10 +201,20 @@ class Script(scripts.Script):
                         dists.insert(i+1, new_dist)
                         break;
                     else:
+                        # DEBUG
+                        if d > ssim_diff:
+                            if i > done:
+                                print(f"Done: {dists[i+1]*100}% ({d}) {len(dists)} frames.   ")
+                        else:
+                            print(f"Reached minimum step limit @{dists[i]} (Skipping) SSIM = {d}   ")
+                            if skip_ssim_min > d:
+                                skip_ssim_min = d
+                            skip_count += 1
                         done = i
             # DEBUG
-            print(dists)
-            
+            print("SSIM done!")
+            if skip_count > 0:
+                print(f"Minimum step limits reached: {skip_count} Worst: {skip_ssim_min}")
 
         # Save video
         if save_video:
