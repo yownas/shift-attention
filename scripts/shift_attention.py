@@ -290,8 +290,8 @@ class Script(scripts.Script):
             D = []
 
             # Settings
-            D.extend(['Prompt:\n', p.prompt, '\n'])
-            D.extend(['Negative prompt:\n', p.negative_prompt, '\n'])
+            D.extend(['Prompt:\n', initial_prompt, '\n'])
+            D.extend(['Negative prompt:\n', initial_negative_prompt, '\n'])
             D.append('\n')
             D.extend(['Width: ', str(p.width), '\n'])
             D.extend(['Height: ', str(p.height), '\n'])
@@ -299,7 +299,7 @@ class Script(scripts.Script):
             D.extend(['Steps: ', str(p.steps), '\n'])
             D.extend(['CFG scale: ', str(p.cfg_scale), '\n'])
             D.extend(['Seed: ', str(p.seed), '\n'])
-            D.append('---------------------------------------\n')
+            D.append('- Shift Attention settings ------------\n')
             # Shift Attention Settings
             D.extend(['Steps: ', str(int(steps)), '\n'])
             D.extend(['FPS: ', str(video_fps), '\n'])
