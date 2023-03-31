@@ -8,8 +8,10 @@
 
 import gradio as gr
 import math
+import matplotlib.pyplot as plt
 import numpy
 import os
+from PIL import Image
 import random
 import re
 import sys
@@ -24,7 +26,7 @@ from modules.images import resize_image
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from rife.RIFE_HDv3 import Model
 
-__ = lambda key, value=None: opts.data.get(f'customscript/seed_travel.py/txt2img/{key}/value', value)
+__ = lambda key, value=None: opts.data.get(f'customscript/shift-attention.py/txt2img/{key}/value', value)
 
 DEFAULT_UPSCALE_METH   = __('Upscaler', 'Lanczos')
 DEFAULT_UPSCALE_RATIO  = __('Upscale ratio', 1.0)
@@ -38,25 +40,28 @@ class Script(scripts.Script):
         return True
 
     def ui(self, is_img2img):
-        steps = gr.Number(label='Steps (minimum)', value=10)
+        steps = gr.Number(label='Steps', value=10)
         with gr.Row():
-            video_fps = gr.Number(label='Frames per second (0 to disable video)', value=30) # FIXME remove
-            lead_inout = gr.Number(label='Number of frames for lead in/out', value=0)
+            video_fps = gr.Number(label='FPS', value=30)
+            lead_inout = gr.Number(label='Lead in/out', value=0)
         with gr.Row():
-            ssim_diff = gr.Slider(label='SSIM threshold (1.0=exact copy)', value=0.0, minimum=0.0, maximum=1.0, step=0.01)
-            ssim_ccrop = gr.Slider(label='SSIM CenterCrop% (0 to disable)', value=0, minimum=0, maximum=100, step=1)
+            ssim_diff = gr.Slider(label='SSIM threshold', value=0.0, minimum=0.0, maximum=1.0, step=0.01)
+            ssim_ccrop = gr.Slider(label='SSIM CenterCrop%', value=0, minimum=0, maximum=100, step=1)
         with gr.Row():
             rife_passes = gr.Number(label='RIFE passes', value=0)
             rife_drop = gr.Checkbox(label='Drop original frames', value=False)
-        with gr.Row():
-            upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
-            upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
-        with gr.Row():
+        with gr.Accordion(label='Seed Travel Extras...', open=False):
+            gr.HTML(value='Shift Attention links: <a href=http://github.com/yownas/shift-attention/>Github</a>')
+            with gr.Row():
+                upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
+                upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
+            with gr.Row():
+                show_images = gr.Checkbox(label='Show generated images in ui', value=True)
             substep_min = gr.Number(label='SSIM minimum step', value=0.0001)
-            ssim_diff_min = gr.Slider(label='Desired min SSIM threshold (% of threshold)', value=75, minimum=0, maximum=100, step=1)
-        show_images = gr.Checkbox(label='Show generated images in ui', value=True)
+            ssim_diff_min = gr.Slider(label='SSIM min threshold', value=75, minimum=0, maximum=100, step=1)
+            save_stats = gr.Checkbox(label='Save extra status information', value=True)
 
-        return [steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop]
+        return [steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -75,7 +80,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop):
+    def run(self, p, steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -167,8 +172,11 @@ class Script(scripts.Script):
 
             check = True
             skip_count = 0
-            skip_ssim_min = 1.0
             not_better = 0
+            skip_ssim_min = 1.0
+            min_step = 1.0
+            ssim_stats = {}
+            ssim_stats_new = {}
 
             done = 0
             while(check):
@@ -188,10 +196,14 @@ class Script(scripts.Script):
 
                         # Add image and run check again
                         check = True
+
                         new_dist = (dists[i] + dists[i+1])/2.0
 
                         p.prompt = shift_attention(initial_prompt, new_dist)
                         p.negative_prompt = shift_attention(initial_negative_prompt, new_dist)
+
+                        # SSIM stats for the new image
+                        ssim_stats_new[(dists[i], dists[i+1])] = d
 
                         print(f"Process: {new_dist}")
                         proc = process_images(p)
@@ -214,7 +226,7 @@ class Script(scripts.Script):
                             images.insert(i+1, image)
                             dists.insert(i+1, new_dist)
                         else:
-                            print(f"Failed to find improvment: {d2} < {d} ({d-d2}) Giving up.")
+                            print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
                             not_better += 1
                             done = i + 1
 
@@ -230,10 +242,86 @@ class Script(scripts.Script):
                                 skip_ssim_min = d
                             skip_count += 1
                         done = i
+                        ssim_stats[(dists[i], dists[i+1])] = d
             # DEBUG
             print("SSIM done!")
             if skip_count > 0:
                 print(f"Minimum step limits reached: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better}")
+
+        # Save video before continuing with SSIM-stats and RIFE (If things crashes we will atleast have this video)
+        if save_video:
+            frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
+            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)
+            filename = f"shift-{shift_number:05}.mp4"
+            clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
+
+        # SSIM-stats
+        if save_stats and ssim_diff > 0:
+            # Create scatter plot
+            x = []
+            y = []
+            for i in ssim_stats_new:
+                s = i[1] - i[0]
+                if s > 0:
+                    x.append(s) # step distance
+                    y.append(ssim_stats_new[i]) # ssim
+            plt.scatter(x, y, s=1, color='#ffa600')
+            x = []
+            y = []
+            for i in ssim_stats:
+                s = i[1] - i[0]
+                if s > 0:
+                    x.append(s) # step distance
+                    y.append(ssim_stats[i]) # ssim
+            plt.scatter(x, y, s=1, color='#003f5c')
+            plt.axvline(substep_min)
+            plt.axhline(ssim_diff)
+
+            plt.xscale('log')
+            plt.title('SSIM scatter plot')
+            plt.xlabel('Step distance')
+            plt.ylabel('SSIM')
+            filename = f"ssim_scatter-{shift_number:05}.svg"
+            plt.savefig(os.path.join(shift_path, filename))
+            plt.close()
+
+        # Save settings and other information
+        if save_stats:
+            D = []
+
+            # Settings
+            D.extend(['Prompt:\n', p.prompt, '\n'])
+            D.extend(['Negative prompt:\n', p.negative_prompt, '\n'])
+            D.append('\n')
+            D.extend(['Width: ', str(p.width), '\n'])
+            D.extend(['Height: ', str(p.height), '\n'])
+            D.extend(['Sampler: ', p.sampler_name, '\n'])
+            D.extend(['Steps: ', str(p.steps), '\n'])
+            D.extend(['CFG scale: ', str(p.cfg_scale), '\n'])
+            D.extend(['Seed: ', str(p.seed), '\n'])
+            D.append('---------------------------------------\n')
+            # Shift Attention Settings
+            D.extend(['Steps: ', str(int(steps)), '\n'])
+            D.extend(['FPS: ', str(video_fps), '\n'])
+            D.extend(['Lead in/out: ', str(int(lead_inout)), '\n'])
+            D.extend(['SSIM threshold: ', str(ssim_diff), '\n'])
+            D.extend(['SSIM CenterCrop%: ', str(ssim_ccrop), '\n'])
+            D.extend(['RIFE passes: ', str(int(rife_passes)), '\n'])
+            D.extend(['Drop original frames: ', str(rife_drop), '\n'])
+            D.extend(['Upscaler: ', upscale_meth, '\n'])
+            D.extend(['Upscale ratio: ', str(upscale_ratio), '\n'])
+            D.extend(['SSIM min substep: ', str(substep_min), '\n'])
+            D.extend(['SSIM min threshold: ', str(ssim_diff_min), '\n'])
+            D.append('---------------------------------------\n')
+            # Generation stats
+            if ssim_diff:
+                D.append(f"Stats: Skip count: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better} Min. step: {min_step}\n")
+            D.append(f"Frames: {len(images)}\n")
+
+            filename = f"shift-attention-info-{shift_number:05}.txt"
+            file = open(os.path.join(shift_path, filename), 'w')
+            file.writelines(D)
+            file.close()
 
         # RIFE (from https://github.com/vladmandic/rife)
         if rife_passes:
@@ -311,13 +399,6 @@ class Script(scripts.Script):
             filename = f"shift-rife-{shift_number:05}.mp4"
             clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
         # RIFE end
-
-        # Save video
-        if save_video:
-            frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
-            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)
-            filename = f"shift-{shift_number:05}.mp4"
-            clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
 
         processed = Processed(p, images if show_images else [], p.seed, initial_info)
 
