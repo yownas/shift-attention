@@ -10,11 +10,11 @@ It will also allow multiple values, like this "(token:value1\~value2\~value3...\
 
 One thing to keep in mind is that "(cat:0)" might still generate cats. If you want to morph from one thing into another you can use [Composable Diffusion](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Features#composable-diffusion) with the AND keyword. This example will morph from a cat into a dog:
 
-cat :1~0 AND dog :0~1
+cat :1\~0 AND dog :0\~1
 
 A more advanced usage is to add the keyword "THEN" to make a list of prompts to shift. Example:
 
-cat :1~0 AND dog :0~1 THEN dog THEN(seed=2) dog :1~0 AND cat :0~1
+cat :1\~0 AND dog :0\~1 THEN dog THEN(seed=2) dog :1\~0 AND cat :0\~1
 
 This would morph from "cat" to "dog", then shift "dog", slowly changing to seed 2 and lastly, morph from "dog" to "cat" again. If this feels confusing, don't worry, you do not have to use it if you. It also requires you to make sure the prompt before THEN will end in something that match the start of the prompt that comes after to get a smooth animation.
 
