@@ -8,6 +8,18 @@ The format is "(token:start value\~end value)" or ":start value\~end value" (ple
 
 It will also allow multiple values, like this "(token:value1\~value2\~value3...\~valueN)". This can be used if you want the value to stay static for a while "(cat:0.1\~0.1\~1)" or jump between values "(dog:1\~0.5\~1\~-0.3)". The number of values do not have to be the same for every token in the prompt, the interpolation between them be spread out of the the number of steps you given.
 
+One thing to keep in mind is that "(cat:0)" might still generate cats. If you want to morph from one thing into another you can use [Composable Diffusion](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Features#composable-diffusion) with the AND keyword. This example will morph from a cat into a dog:
+
+cat :1~0 AND dog :0~1
+
+A more advanced usage is to add the keyword "THEN" to make a list of prompts to shift. Example:
+
+cat :1~0 AND dog :0~1 THEN dog THEN(seed=2) dog :1~0 AND cat :0~1
+
+This would morph from "cat" to "dog", then shift "dog", slowly changing to seed 2 and lastly, morph from "dog" to "cat" again. If this feels confusing, don't worry, you do not have to use it if you. It also requires you to make sure the prompt before THEN will end in something that match the start of the prompt that comes after to get a smooth animation.
+
+If the prompt and the negative prompt has different amount of prompts split up by THEN, the last prompt will be reused.
+
 # Installation
 
 The recommended way to install it is to:
@@ -27,27 +39,29 @@ Manual install (not recommmended):
 
 `Steps (minimum)`: Number of steps to take from the initial image. The ranges you specified in the prompt will be spread out over these steps. "(minimum)" refers to SSIM usage (see below).
 
-`Frames per second`: The fps of the video.
+`FPS`: The frames per second of the video.
 
-`Number of frames for lead in/out`: Amount of frames to be padded with a static image at the start and ending of the video. So you'll get a short pause before the video start/ends.
+`Lead in/out`: Amount of frames to be padded with a static image at the start and ending of the video. So you'll get a short pause before the video start/ends.
 
-`SSIM threshold (1.0=exact copy)`: If this is set to something other than 0, the script will first generate the steps you've specified above, but then take a second pass and fill in the gaps between images that differ too much according to Structual Similarity Index Metric [(pdf)](https://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf). A good value depends a lot on which model and prompt you use, but 0.7 to 0.8 should be a good starting value. More than 0.95 will probably not improve much. If you want a very smooth video you should use something like [Flowframes](https://nmkd.itch.io/flowframes).
+`SSIM threshold`: If this is set to something other than 0, the script will first generate the steps you've specified above, but then take a second pass and fill in the gaps between images that differ too much according to Structual Similarity Index Metric [(pdf)](https://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf). A good value depends a lot on which model and prompt you use, but 0.7 to 0.8 should be a good starting value. More than 0.95 will probably not improve much. If you want a very smooth video you should use something like [Flowframes](https://nmkd.itch.io/flowframes).
 
-`SSIM CenterCrop% (0 to disable)`: Crop a piece from the center of the image to be used for SSIM. In percent of the height and width. 0 will use the entire image. Only checking a small part of the image might make SSIM more sensitive. Be prepared to lower SSIM threshold to 0.4 to 0.5 if you use this.
+`SSIM CenterCrop%`: Crop a piece from the center of the image to be used for SSIM. In percent of the height and width. 0 will use the entire image. Only checking a small part of the image might make SSIM more sensitive. Be prepared to lower SSIM threshold to 0.4 to 0.5 if you use this.
 
 `RIFE passes`: Use [Real-Time Intermediate Flow Estimation](https://github.com/vladmandic/rife) to interpolate between frames. Each pass will add 1 frame per frame, doubling the total number of frames. This does not change the fps above, so you need to keep that in mind if it is important to you. (This will save a seperate video file.)
 
 `Drop original frames`: Drop the original frames and only keep the RIFE-frames. Keeping the same frame count and fps as before.
 
+`Shift Attention extras`: Open this to show less used settings.
+
 `Upscaler`: Choose upscale method to be applied to the images before made into a video.
 
 `Upscale ratio`: How much the images should be upscaled. A value of 0 or 1 will disable scaling.
 
+`Show generated images in ui`: Disable this if you generate a lot of steps to make life easier for your browser.
+
 `SSIM minimum step`: Smallest "step" SSIM is allowed to take. Sometimes animations can't me smoothed out, no matter how small steps you take. It is better to let the script give up and have a single skip than force it and get an animation that flickers.
 
-`Desired min SSIM threshold (% of threshold)`: Try to make new images "at least" this good. By default SSIM will give up a newly generated image is worse then the gap it is trying to fill. This will allow you to set "Steps" to something as low as 1 and not have SSIM give up just because the image halfway through was bad.
-
-`Show generated images in ui`: Disable this if you generate a lot of steps to make life easier for your browser.
+`SSIM min threshold`: Try to make new images "at least" this good. By default SSIM will give up a newly generated image is worse then the gap it is trying to fill. This will allow you to set "Steps" to something as low as 1 and not have SSIM give up just because the image halfway through was bad.
 
 # Show your work
 

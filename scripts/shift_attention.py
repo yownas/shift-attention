@@ -50,7 +50,7 @@ class Script(scripts.Script):
         with gr.Row():
             rife_passes = gr.Number(label='RIFE passes', value=0)
             rife_drop = gr.Checkbox(label='Drop original frames', value=False)
-        with gr.Accordion(label='Seed Travel Extras...', open=False):
+        with gr.Accordion(label='Shift Attention Extras...', open=False):
             gr.HTML(value='Shift Attention links: <a href=http://github.com/yownas/shift-attention/>Github</a>')
             with gr.Row():
                 upscale_meth  = gr.Dropdown(label='Upscaler',    value=lambda: DEFAULT_UPSCALE_METH, choices=CHOICES_UPSCALER)
@@ -101,6 +101,8 @@ class Script(scripts.Script):
         lead_inout = int(lead_inout)
         tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
         save_video = video_fps > 0
+        ssim_stats = {}
+        ssim_stats_new = {}
 
         if not save_video and not show_images:
             print(f"Nothing to do. You should save the results as a video or show the generated images.")
@@ -129,124 +131,187 @@ class Script(scripts.Script):
         # Make sure seed is fixed
         fix_seed(p)
 
-        total_images = int(steps)
-        print(f"Generating {total_images} images.")
-
-        # Set generation helpers
-        state.job_count = total_images
-
         initial_prompt = p.prompt
         initial_negative_prompt = p.negative_prompt
+        initial_seed = p.seed
 
-        # Generate all the steps
-        for i in range(int(steps) + 1):
-            if state.interrupted:
+        # Kludge for seed travel 
+        p.subseed = p.seed
+
+        # Split prompt and generate list of prompts
+        promptlist = re.split("(THEN\(seed=[0-9]*\)|THEN)", p.prompt)+[None]
+        negative_promptlist = re.split("(THEN\(seed=[0-9]*\)|THEN)", p.negative_prompt)+[None]
+
+        # Build new list
+        prompts = []
+        while len(promptlist) or len(negative_promptlist):
+            prompt, subseed, negprompt, negsubseed = (None, None, None, None)
+            if len(promptlist):
+                prompt = promptlist.pop(0).strip()
+                subseed = promptlist.pop(0)
+                if subseed:
+                    s = re.sub("THEN\(seed=([0-9]*)\)", "\\1", subseed)
+                    subseed = int(s) if s.isdigit() else None
+            if len(negative_promptlist):
+                negprompt = negative_promptlist.pop(0).strip()
+                negsubseed = negative_promptlist.pop(0)
+                if negsubseed:
+                    s = re.sub("THEN\(seed=([0-9]*)\)", "\\1", negsubseed)
+                    negsubseed = int(s) if s.isdigit() else None
+            if not subseed:
+                subseed = negsubseed
+            #if subseed and len(prompts):
+            #    prompts[-1] = (prompts[-1][0], prompts[-1][1], subseed)
+            prompts += [(prompt, negprompt, subseed)]
+
+        # Set generation helpers
+        total_images = int(steps) * len(prompts)
+        state.job_count = total_images
+        print(f"Generating {total_images} images.")
+
+        # Generate prompt_images and add to images (the big list)
+        prompt = p.prompt
+        negprompt = p.negative_prompt
+        seed = p.seed
+        subseed = p.subseed
+        for new_prompt, new_negprompt, new_subseed in prompts:
+            if new_prompt: 
+                prompt = new_prompt
+            if new_negprompt:
+                negprompt = new_negprompt
+            if new_subseed:
+                subseed = new_subseed
+
+            p.seed = seed
+            p.subseed = subseed
+
+            # Frames for the current prompt pair
+            prompt_images = []
+            dists = []
+
+            # Empty prompt
+            if not new_prompt and not new_negprompt: 
+                print("NO PROMPT")
                 break
 
-            distance = float(i / int(steps))
-            p.prompt = shift_attention(initial_prompt, distance)
-            p.negative_prompt = shift_attention(initial_negative_prompt, distance)
+            #DEBUG
+            print(f"Shifting prompt:\n+ {prompt}\n- {negprompt}\nSeeds: {int(seed)}/{int(subseed)}")
 
-            proc = process_images(p)
-            if initial_info is None:
-                initial_info = proc.info
-
-            # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
-            if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
-                image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
-            else:
-                image = [proc.images[0]]
-
-            images += image
-            dists += [distance]
-
-        # SSIM
-        if ssim_diff > 0:
-            ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
-            if ssim_ccrop == 0:
-                transform = transforms.Compose([transforms.ToTensor()])
-            else:
-                transform = transforms.Compose([transforms.CenterCrop((tgt_h*(ssim_ccrop/100), tgt_w*(ssim_ccrop/100))), transforms.ToTensor()])
-
-            transform = transforms.Compose([transforms.ToTensor()])
-
-            check = True
-            skip_count = 0
-            not_better = 0
-            skip_ssim_min = 1.0
-            min_step = 1.0
-            ssim_stats = {}
-            ssim_stats_new = {}
-
-            done = 0
-            while(check):
+            # Generate the steps
+            for i in range(int(steps) + 1):
                 if state.interrupted:
                     break
-                check = False
-                for i in range(done, len(images)-1):
-                    # Check distance between i and i+1
+    
+                distance = float(i / int(steps))
+                p.prompt = shift_attention(prompt, distance)
+                p.negative_prompt = shift_attention(negprompt, distance)
+                p.subseed_strength = distance
 
-                    a = transform(images[i].convert('RGB')).unsqueeze(0)
-                    b = transform(images[i+1].convert('RGB')).unsqueeze(0)
-                    d = ssim(a, b)
-
-                    if d < ssim_diff and (dists[i+1] - dists[i]) > substep_min:
-                        # FIXME debug output
-                        print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
-
-                        # Add image and run check again
-                        check = True
-
-                        new_dist = (dists[i] + dists[i+1])/2.0
-
-                        p.prompt = shift_attention(initial_prompt, new_dist)
-                        p.negative_prompt = shift_attention(initial_negative_prompt, new_dist)
-
-                        # SSIM stats for the new image
-                        ssim_stats_new[(dists[i], dists[i+1])] = d
-
-                        print(f"Process: {new_dist}")
-                        proc = process_images(p)
-
-                        if initial_info is None:
-                            initial_info = proc.info
-                        
-                        # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
-                        if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
-                            image = resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)
+                proc = process_images(p)
+                if initial_info is None:
+                    initial_info = proc.info
+    
+                # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
+                if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
+                    image = [resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)]
+                else:
+                    image = [proc.images[0]]
+    
+                prompt_images += image
+                dists += [distance]
+    
+            # SSIM
+            if ssim_diff > 0:
+                ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
+                if ssim_ccrop == 0:
+                    transform = transforms.Compose([transforms.ToTensor()])
+                else:
+                    transform = transforms.Compose([transforms.CenterCrop((tgt_h*(ssim_ccrop/100), tgt_w*(ssim_ccrop/100))), transforms.ToTensor()])
+    
+                transform = transforms.Compose([transforms.ToTensor()])
+    
+                check = True
+                skip_count = 0
+                not_better = 0
+                skip_ssim_min = 1.0
+                min_step = 1.0
+    
+                done = 0
+                while(check):
+                    if state.interrupted:
+                        break
+                    check = False
+                    for i in range(done, len(prompt_images)-1):
+                        # Check distance between i and i+1
+    
+                        a = transform(prompt_images[i].convert('RGB')).unsqueeze(0)
+                        b = transform(prompt_images[i+1].convert('RGB')).unsqueeze(0)
+                        d = ssim(a, b)
+    
+                        if d < ssim_diff and (dists[i+1] - dists[i]) > substep_min:
+                            # FIXME debug output
+                            print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
+    
+                            # Add image and run check again
+                            check = True
+    
+                            new_dist = (dists[i] + dists[i+1])/2.0
+    
+                            p.prompt = shift_attention(prompt, new_dist)
+                            p.negative_prompt = shift_attention(negprompt, new_dist)
+                            p.subseed_strength = new_dist
+    
+                            # SSIM stats for the new image
+                            ssim_stats_new[(dists[i], dists[i+1])] = d
+    
+                            print(f"Process: {new_dist}")
+                            proc = process_images(p)
+    
+                            if initial_info is None:
+                                initial_info = proc.info
+                            
+                            # upscale - copied from https://github.com/Kahsolt/stable-diffusion-webui-prompt-travel
+                            if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
+                                image = resize_image(0, proc.images[0], tgt_w, tgt_h, upscaler_name=upscale_meth)
+                            else:
+                                image = proc.images[0]
+    
+                            # Check if this was an improvment
+                            c = transform(image.convert('RGB')).unsqueeze(0)
+                            d2 = ssim(a, c)
+    
+                            if d2 > d or d2 < ssim_diff*ssim_diff_min/100.0:
+                                # Keep image if it is improvment or hasn't reached desired min ssim_diff
+                                prompt_images.insert(i+1, image)
+                                dists.insert(i+1, new_dist)
+                            else:
+                                print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
+                                not_better += 1
+                                done = i + 1
+    
+                            break;
                         else:
-                            image = proc.images[0]
+                            # DEBUG
+                            if d > ssim_diff:
+                                if i > done:
+                                    print(f"Done: {dists[i+1]*100}% ({d}) {len(dists)} frames.   ")
+                            else:
+                                print(f"Reached minimum step limit @{dists[i]} (Skipping) SSIM = {d}   ")
+                                if skip_ssim_min > d:
+                                    skip_ssim_min = d
+                                skip_count += 1
+                            done = i
+                            ssim_stats[(dists[i], dists[i+1])] = d
+                # DEBUG
+                print("SSIM done!")
+                if skip_count > 0:
+                    print(f"Minimum step limits reached: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better}")
 
-                        # Check if this was an improvment
-                        c = transform(image.convert('RGB')).unsqueeze(0)
-                        d2 = ssim(a, c)
+            # We should have reached the subseed if we were seed traveling
+            seed = subseed
 
-                        if d2 > d or d2 < ssim_diff*ssim_diff_min/100.0:
-                            # Keep image if it is improvment or hasn't reached desired min ssim_diff
-                            images.insert(i+1, image)
-                            dists.insert(i+1, new_dist)
-                        else:
-                            print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
-                            not_better += 1
-                            done = i + 1
-
-                        break;
-                    else:
-                        # DEBUG
-                        if d > ssim_diff:
-                            if i > done:
-                                print(f"Done: {dists[i+1]*100}% ({d}) {len(dists)} frames.   ")
-                        else:
-                            print(f"Reached minimum step limit @{dists[i]} (Skipping) SSIM = {d}   ")
-                            if skip_ssim_min > d:
-                                skip_ssim_min = d
-                            skip_count += 1
-                        done = i
-                        ssim_stats[(dists[i], dists[i+1])] = d
-            # DEBUG
-            print("SSIM done!")
-            if skip_count > 0:
-                print(f"Minimum step limits reached: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better}")
+            # End of prompt_image loop
+            images += prompt_images
 
         # Save video before continuing with SSIM-stats and RIFE (If things crashes we will atleast have this video)
         if save_video:
@@ -298,7 +363,7 @@ class Script(scripts.Script):
             D.extend(['Sampler: ', p.sampler_name, '\n'])
             D.extend(['Steps: ', str(p.steps), '\n'])
             D.extend(['CFG scale: ', str(p.cfg_scale), '\n'])
-            D.extend(['Seed: ', str(p.seed), '\n'])
+            D.extend(['Seed: ', str(initial_seed), '\n'])
             D.append('- Shift Attention settings ------------\n')
             # Shift Attention Settings
             D.extend(['Steps: ', str(int(steps)), '\n'])
@@ -372,7 +437,7 @@ class Script(scripts.Script):
             def pad(img):
                 return F.pad(img, padding).half() if fp16 else F.pad(img, padding)
     
-            rife_images = images
+            rife_images = frames
     
             for i in range(int(rife_passes)):
                 print(f"RIFE pass {i+1}")
