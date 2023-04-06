@@ -39,7 +39,7 @@ Manual install (not recommmended):
 
 `Steps (minimum)`: Number of steps to take from the initial image. The ranges you specified in the prompt will be spread out over these steps. "(minimum)" refers to SSIM usage (see below).
 
-`FPS`: The frames per second of the video.
+`FPS`: The Frames Per Second of the video. It has a hidden feature where if you set this to a negative value, it will be used as the length (in seconds) of the resulting video(s).
 
 `Lead in/out`: Amount of frames to be padded with a static image at the start and ending of the video. So you'll get a short pause before the video start/ends.
 

@@ -100,7 +100,7 @@ class Script(scripts.Script):
         dists = []
         lead_inout = int(lead_inout)
         tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
-        save_video = video_fps > 0
+        save_video = video_fps != 0
         ssim_stats = {}
         ssim_stats_new = {}
 
@@ -316,7 +316,8 @@ class Script(scripts.Script):
         # Save video before continuing with SSIM-stats and RIFE (If things crashes we will atleast have this video)
         if save_video:
             frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
-            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)
+            fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
+            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
             filename = f"shift-{shift_number:05}.mp4"
             clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
 
@@ -460,7 +461,8 @@ class Script(scripts.Script):
                 rife_images = buffer
     
             frames = [np.asarray(rife_images[0])] * lead_inout + [np.asarray(t) for t in rife_images] + [np.asarray(rife_images[-1])] * lead_inout
-            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=video_fps)
+            fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
+            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
             filename = f"shift-rife-{shift_number:05}.mp4"
             clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
         # RIFE end
