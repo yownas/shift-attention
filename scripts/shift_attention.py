@@ -99,7 +99,10 @@ class Script(scripts.Script):
         images = []
         dists = []
         lead_inout = int(lead_inout)
-        tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
+        if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
+            tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
+        else:
+            tgt_w, tgt_h = p.width, p.height
         save_video = video_fps != 0
         ssim_stats = {}
         ssim_stats_new = {}
