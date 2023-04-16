@@ -59,6 +59,8 @@ Manual install (not recommmended):
 
 `Show generated images in ui`: Disable this if you generate a lot of steps to make life easier for your browser.
 
+`Mirror mode`: Let the animation "bounce back" to the start by playing it in reverse.
+
 `SSIM minimum step`: Smallest "step" SSIM is allowed to take. Sometimes animations can't me smoothed out, no matter how small steps you take. It is better to let the script give up and have a single skip than force it and get an animation that flickers.
 
 `SSIM min threshold`: Try to make new images "at least" this good. By default SSIM will give up a newly generated image is worse then the gap it is trying to fill. This will allow you to set "Steps" to something as low as 1 and not have SSIM give up just because the image halfway through was bad.

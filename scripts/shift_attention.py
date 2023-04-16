@@ -59,11 +59,12 @@ class Script(scripts.Script):
                 upscale_ratio = gr.Slider(label='Upscale ratio', value=lambda: DEFAULT_UPSCALE_RATIO, minimum=0.0, maximum=8.0, step=0.1)
             with gr.Row():
                 show_images = gr.Checkbox(label='Show generated images in ui', value=True)
+                mirror_mode = gr.Checkbox(label='Mirror mode', value=False)
             substep_min = gr.Number(label='SSIM minimum step', value=0.0001)
             ssim_diff_min = gr.Slider(label='SSIM min threshold', value=75, minimum=0, maximum=100, step=1)
             save_stats = gr.Checkbox(label='Save extra status information', value=True)
 
-        return [steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats]
+        return [steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -82,7 +83,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats):
+    def run(self, p, steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -317,6 +318,9 @@ class Script(scripts.Script):
 
             # End of prompt_image loop
             images += prompt_images
+
+        if mirror_mode:
+            images = images + images[::-1]
 
         # Save video before continuing with SSIM-stats and RIFE (If things crashes we will atleast have this video)
         if save_video:
