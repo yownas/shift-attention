@@ -106,6 +106,7 @@ class Script(scripts.Script):
             tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
         else:
             tgt_w, tgt_h = p.width, p.height
+        video_fps = 0 if video_fps == None else video_fps
         save_video = video_fps != 0
         ssim_stats = {}
         ssim_stats_new = {}
@@ -324,11 +325,16 @@ class Script(scripts.Script):
 
         # Save video before continuing with SSIM-stats and RIFE (If things crashes we will atleast have this video)
         if save_video:
-            frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
-            fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
-            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
-            filename = f"shift-{shift_number:05}.mp4"
-            clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
+            if mirror_mode:
+                images = images + images[::-1]
+            try:
+                frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
+                fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
+                clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
+                filename = f"shift-{shift_number:05}.mp4"
+                clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
+            except:
+                print(f"ERROR: Failed generating video")
 
         # SSIM-stats
         if save_stats and ssim_diff > 0:
@@ -469,11 +475,17 @@ class Script(scripts.Script):
                         buffer.append(np.asarray(frame))
                 rife_images = buffer
     
-            frames = [np.asarray(rife_images[0])] * lead_inout + [np.asarray(t) for t in rife_images] + [np.asarray(rife_images[-1])] * lead_inout
-            fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
-            clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
-            filename = f"shift-rife-{shift_number:05}.mp4"
-            clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
+            if mirror_mode:
+                rife_images = rife_images + rife_images[::-1]
+
+            try:
+                frames = [np.asarray(rife_images[0])] * lead_inout + [np.asarray(t) for t in rife_images] + [np.asarray(rife_images[-1])] * lead_inout
+                fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
+                clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
+                filename = f"shift-rife-{shift_number:05}.mp4"
+                clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
+            except:
+                print(f"ERROR: Failed generating RIFE video")
         # RIFE end
 
         processed = Processed(p, images if show_images else [], p.seed, initial_info)
