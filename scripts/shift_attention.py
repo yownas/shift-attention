@@ -101,6 +101,8 @@ class Script(scripts.Script):
         initial_info = None
         images = []
         dists = []
+        gen_data = []
+        imgcnt=-1
         lead_inout = int(lead_inout)
         if upscale_meth != 'None' and upscale_ratio != 1.0 and upscale_ratio != 0.0:
             tgt_w, tgt_h = round(p.width * upscale_ratio), round(p.height * upscale_ratio)
@@ -215,6 +217,7 @@ class Script(scripts.Script):
                 p.subseed_strength = distance
 
                 proc = process_images(p)
+                imgcnt += 1
                 if initial_info is None:
                     initial_info = proc.info
     
@@ -226,6 +229,7 @@ class Script(scripts.Script):
     
                 prompt_images += image
                 dists += [distance]
+                gen_data += [(imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength)]
     
             # SSIM
             if ssim_diff > 0:
@@ -273,6 +277,7 @@ class Script(scripts.Script):
     
                             print(f"Process: {new_dist}")
                             proc = process_images(p)
+                            imgcnt += 1
     
                             if initial_info is None:
                                 initial_info = proc.info
@@ -291,6 +296,7 @@ class Script(scripts.Script):
                                 # Keep image if it is improvment or hasn't reached desired min ssim_diff
                                 prompt_images.insert(i+1, image)
                                 dists.insert(i+1, new_dist)
+                                gen_data.insert(i+1, (imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength))
                             else:
                                 print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
                                 not_better += 1
@@ -398,6 +404,19 @@ class Script(scripts.Script):
             if ssim_diff:
                 D.append(f"Stats: Skip count: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better} Min. step: {min_step}\n")
             D.append(f"Frames: {len(images)}\n")
+
+            # Generation log
+            D.append('\n- Generation log ----------------------\n')
+            i = 0
+            for c,pr,np,s,ss,d in gen_data:
+                # count, promp, neg_prompt, seed, subseed, strength
+                if s == ss:
+                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s}\n")
+                else:
+                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s} ({ss} {d})\n")
+                D.append(f"+ {pr}\n")
+                D.append(f"- {np}\n")
+                i+=1
 
             filename = f"shift-attention-info-{shift_number:05}.txt"
             file = open(os.path.join(shift_path, filename), 'w')
