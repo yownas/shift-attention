@@ -408,14 +408,14 @@ class Script(scripts.Script):
             # Generation log
             D.append('\n- Generation log ----------------------\n')
             i = 0
-            for c,pr,np,s,ss,d in gen_data:
+            for c,pr,negp,s,ss,d in gen_data:
                 # count, promp, neg_prompt, seed, subseed, strength
                 if s == ss:
                     D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s}\n")
                 else:
                     D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s} ({ss} {d})\n")
                 D.append(f"+ {pr}\n")
-                D.append(f"- {np}\n")
+                D.append(f"- {negp}\n")
                 i+=1
 
             filename = f"shift-attention-info-{shift_number:05}.txt"
