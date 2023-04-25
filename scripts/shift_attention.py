@@ -7,11 +7,12 @@
 # Will also support multiple numbers. "(cat:1~0~1)" will go from cat:1 to cat:0 to cat:1 streched over the number of steps
 
 import gradio as gr
+import imageio
 import math
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
-import numpy
+import numpy as np
 import os
 from PIL import Image
 import random
@@ -116,14 +117,6 @@ class Script(scripts.Script):
         if not save_video and not show_images:
             print(f"Nothing to do. You should save the results as a video or show the generated images.")
             return Processed(p, images, p.seed)
-
-        if save_video:
-            import numpy as np
-            try:
-                import moviepy.video.io.ImageSequenceClip as ImageSequenceClip
-            except ImportError:
-                print(f"moviepy python module not installed. Will not be able to generate video.")
-                return Processed(p, images, p.seed)
 
         # Custom folder for saving images/animations
         shift_path = os.path.join(p.outpath_samples, "shift")
@@ -336,11 +329,13 @@ class Script(scripts.Script):
             try:
                 frames = [np.asarray(images[0])] * lead_inout + [np.asarray(t) for t in images] + [np.asarray(images[-1])] * lead_inout
                 fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
-                clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
                 filename = f"shift-{shift_number:05}.mp4"
-                clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
-            except:
-                print(f"ERROR: Failed generating video")
+                writer = imageio.get_writer(os.path.join(shift_path, filename), fps=fps)
+                for frame in frames:
+                    writer.append_data(frame)
+                writer.close()
+            except Exception as err:
+                print(f"ERROR: Failed generating video: {err}")
 
         # SSIM-stats
         if save_stats and ssim_diff > 0:
@@ -500,11 +495,13 @@ class Script(scripts.Script):
             try:
                 frames = [np.asarray(rife_images[0])] * lead_inout + [np.asarray(t) for t in rife_images] + [np.asarray(rife_images[-1])] * lead_inout
                 fps = video_fps if video_fps > 0 else len(frames) / abs(video_fps)
-                clip = ImageSequenceClip.ImageSequenceClip(frames, fps=fps)
                 filename = f"shift-rife-{shift_number:05}.mp4"
-                clip.write_videofile(os.path.join(shift_path, filename), verbose=False, logger=None)
-            except:
-                print(f"ERROR: Failed generating RIFE video")
+                writer = imageio.get_writer(os.path.join(shift_path, filename), fps=fps)
+                for frame in frames:
+                    writer.append_data(frame)
+                writer.close()
+            except Exception as err:
+                print(f"ERROR: Failed generating RIFE video: {err}")
         # RIFE end
 
         processed = Processed(p, images if show_images else [], p.seed, initial_info)
