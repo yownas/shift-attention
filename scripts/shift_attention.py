@@ -136,35 +136,66 @@ class Script(scripts.Script):
         initial_prompt = p.prompt
         initial_negative_prompt = p.negative_prompt
         initial_seed = p.seed
+        cfg_scale = p.cfg_scale
 
         # Kludge for seed travel 
         p.subseed = p.seed
 
         # Split prompt and generate list of prompts
-        promptlist = re.split("(THEN\(seed=[0-9]*\)|THEN)", p.prompt)+[None]
-        negative_promptlist = re.split("(THEN\(seed=[0-9]*\)|THEN)", p.negative_prompt)+[None]
+        promptlist = re.split("(THEN\([^\)]*\)|THEN)", p.prompt)+[None]
+        negative_promptlist = re.split("(THEN\([^\)]*\)|THEN)", p.negative_prompt)+[None]
 
         # Build new list
         prompts = []
         while len(promptlist) or len(negative_promptlist):
             prompt, subseed, negprompt, negsubseed = (None, None, None, None)
-            if len(promptlist):
-                prompt = promptlist.pop(0).strip()
-                subseed = promptlist.pop(0)
-                if subseed:
-                    s = re.sub("THEN\(seed=([0-9]*)\)", "\\1", subseed)
-                    subseed = int(s) if s.isdigit() else None
+
             if len(negative_promptlist):
                 negprompt = negative_promptlist.pop(0).strip()
-                negsubseed = negative_promptlist.pop(0)
-                if negsubseed:
-                    s = re.sub("THEN\(seed=([0-9]*)\)", "\\1", negsubseed)
-                    negsubseed = int(s) if s.isdigit() else None
+                opts = negative_promptlist.pop(0)
+
+                if opts:
+                    opts = re.sub('THEN\((.*)\)', '\\1', opts)
+                    opts = None if opts == 'THEN' else opts
+                    if opts:
+                        for then_data in opts.split(','): # Get values from THEN()
+                            if '=' in then_data:
+                                opt, val = then_data.split('=')
+                                if opt == 'seed':
+                                    try:
+                                        negsubseed = int(val)
+                                    except:
+                                        negsubseed = None
+                                if opt == 'cfg':
+                                    try:
+                                        new_cfg_scale = float(val)
+                                    except:
+                                        new_cfg_scale = None
+
+            if len(promptlist):
+                prompt = promptlist.pop(0).strip() # Prompt
+                opts = promptlist.pop(0) # THEN()
+                if opts:
+                    opts = re.sub('THEN\((.*)\)', '\\1', opts)
+                    opts = None if opts == 'THEN' else opts
+                    if opts:
+                        for then_data in opts.split(','): # Get values from THEN()
+                            if '=' in then_data:
+                                opt, val = then_data.split('=')
+                                if opt == 'seed':
+                                    try:
+                                        subseed = int(val)
+                                    except:
+                                        subseed = None
+                                if opt == 'cfg':
+                                    try:
+                                        new_cfg_scale = float(val)
+                                    except:
+                                        new_cfg_scale = None
+
             if not subseed:
                 subseed = negsubseed
-            #if subseed and len(prompts):
-            #    prompts[-1] = (prompts[-1][0], prompts[-1][1], subseed)
-            prompts += [(prompt, negprompt, subseed)]
+            prompts += [(prompt, negprompt, subseed, new_cfg_scale)]
 
         # Set generation helpers
         total_images = int(steps) * len(prompts)
@@ -176,7 +207,8 @@ class Script(scripts.Script):
         negprompt = p.negative_prompt
         seed = p.seed
         subseed = p.subseed
-        for new_prompt, new_negprompt, new_subseed in prompts:
+        cfg_scale = p.cfg_scale
+        for new_prompt, new_negprompt, new_subseed, new_cfg_scale in prompts:
             if new_prompt: 
                 prompt = new_prompt
             if new_negprompt:
@@ -193,11 +225,11 @@ class Script(scripts.Script):
 
             # Empty prompt
             if not new_prompt and not new_negprompt: 
-                print("NO PROMPT")
+                #print("NO PROMPT")
                 break
 
             #DEBUG
-            print(f"Shifting prompt:\n+ {prompt}\n- {negprompt}\nSeeds: {int(seed)}/{int(subseed)}")
+            print(f"Shifting prompt:\n+ {prompt}\n- {negprompt}\nSeeds: {int(seed)}/{int(subseed)} CFG: {cfg_scale}~{new_cfg_scale}")
 
             # Generate the steps
             for i in range(int(steps) + 1):
@@ -208,6 +240,8 @@ class Script(scripts.Script):
                 p.prompt = shift_attention(prompt, distance)
                 p.negative_prompt = shift_attention(negprompt, distance)
                 p.subseed_strength = distance
+                if not new_cfg_scale is None:
+                    p.cfg_scale = cfg_scale * (1.-distance) + new_cfg_scale * distance
 
                 proc = process_images(p)
                 imgcnt += 1
@@ -222,8 +256,8 @@ class Script(scripts.Script):
     
                 prompt_images += image
                 dists += [distance]
-                gen_data += [(imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength)]
-    
+                gen_data += [(imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength, p.cfg_scale)]
+
             # SSIM
             if ssim_diff > 0:
                 ssim = StructuralSimilarityIndexMeasure(data_range=1.0)
@@ -253,7 +287,6 @@ class Script(scripts.Script):
                         d = ssim(a, b)
     
                         if d < ssim_diff and (dists[i+1] - dists[i]) > substep_min:
-                            # FIXME debug output
                             print(f"SSIM: {dists[i]} <-> {dists[i+1]} = ({dists[i+1] - dists[i]}) {d}")
     
                             # Add image and run check again
@@ -264,6 +297,8 @@ class Script(scripts.Script):
                             p.prompt = shift_attention(prompt, new_dist)
                             p.negative_prompt = shift_attention(negprompt, new_dist)
                             p.subseed_strength = new_dist
+                            if new_cfg_scale:
+                                p.cfg_scale = cfg_scale * (1.-new_dist) + new_cfg_scale * new_dist
     
                             # SSIM stats for the new image
                             ssim_stats_new[(dists[i], dists[i+1])] = d
@@ -289,7 +324,7 @@ class Script(scripts.Script):
                                 # Keep image if it is improvment or hasn't reached desired min ssim_diff
                                 prompt_images.insert(i+1, image)
                                 dists.insert(i+1, new_dist)
-                                gen_data.insert(i+1, (imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength))
+                                gen_data.insert(i+1, (imgcnt, p.prompt, p.negative_prompt, p.seed, p.subseed, p.subseed_strength, p.cfg_scale))
                             else:
                                 print(f"Did not find improvment: {d2} < {d} ({d-d2}) Taking shortcut.")
                                 not_better += 1
@@ -310,11 +345,15 @@ class Script(scripts.Script):
                             ssim_stats[(dists[i], dists[i+1])] = d
                 # DEBUG
                 print("SSIM done!")
+
                 if skip_count > 0:
                     print(f"Minimum step limits reached: {skip_count} Worst: {skip_ssim_min} No improvment: {not_better}")
 
             # We should have reached the subseed if we were seed traveling
             seed = subseed
+            # ..and the cfg
+            if new_cfg_scale:
+                cfg_scale = new_cfg_scale
 
             # End of prompt_image loop
             images += prompt_images
@@ -403,12 +442,12 @@ class Script(scripts.Script):
             # Generation log
             D.append('\n- Generation log ----------------------\n')
             i = 0
-            for c,pr,negp,s,ss,d in gen_data:
+            for c,pr,negp,s,ss,d,cfg in gen_data:
                 # count, promp, neg_prompt, seed, subseed, strength
                 if s == ss:
-                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s}\n")
+                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s} CFG: {cfg}\n")
                 else:
-                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s} ({ss} {d})\n")
+                    D.append(f"\n--- Frame: {i:05} Image: {c:05} Seed: {s} ({ss} {d}) CFG: {cfg}\n")
                 D.append(f"+ {pr}\n")
                 D.append(f"- {negp}\n")
                 i+=1

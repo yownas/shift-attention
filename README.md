@@ -18,6 +18,10 @@ cat :1\~0 AND dog :0\~1 THEN dog THEN(seed=2) dog :1\~0 AND cat :0\~1
 
 This would morph from "cat" to "dog", then shift "dog", slowly changing to seed 2 and lastly, morph from "dog" to "cat" again. If this feels confusing, don't worry, you do not have to use it if you. It also requires you to make sure the prompt before THEN will end in something that match the start of the prompt that comes after to get a smooth animation.
 
+You can also "shift" the CFG scale. For example, if you set the CFG to something normal and then use this, you will get an animation of a cat that turns into something random:
+
+cat THEN(cfg=0)
+
 If the prompt and the negative prompt has different amount of prompts split up by THEN, the last prompt will be reused.
 
 # Installation
