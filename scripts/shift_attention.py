@@ -297,7 +297,7 @@ class Script(scripts.Script):
                             p.prompt = shift_attention(prompt, new_dist)
                             p.negative_prompt = shift_attention(negprompt, new_dist)
                             p.subseed_strength = new_dist
-                            if new_cfg_scale:
+                            if not new_cfg_scale is None:
                                 p.cfg_scale = cfg_scale * (1.-new_dist) + new_cfg_scale * new_dist
     
                             # SSIM stats for the new image
