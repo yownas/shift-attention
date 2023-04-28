@@ -148,7 +148,7 @@ class Script(scripts.Script):
         # Build new list
         prompts = []
         while len(promptlist) or len(negative_promptlist):
-            prompt, subseed, negprompt, negsubseed = (None, None, None, None)
+            prompt, subseed, negprompt, negsubseed, new_cfg_scale = (None, None, None, None, None)
 
             if len(negative_promptlist):
                 negprompt = negative_promptlist.pop(0).strip()
@@ -453,12 +453,9 @@ class Script(scripts.Script):
                 i+=1
 
             filename = f"shift-attention-info-{shift_number:05}.txt"
-            try:
-                file = open(os.path.join(shift_path, filename), 'w')
-                file.writelines(D)
-                file.close()
-            except Exception as e:
-                print(f"ERROR: {e}")
+            file = open(os.path.join(shift_path, filename), 'w')
+            file.writelines(D)
+            file.close()
 
         # RIFE (from https://github.com/vladmandic/rife)
         if rife_passes:
