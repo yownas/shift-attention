@@ -47,6 +47,8 @@ class Script(scripts.Script):
         with gr.Row():
             video_fps = gr.Number(label='FPS', value=30)
             lead_inout = gr.Number(label='Lead in/out', value=0)
+       with gr.Row():
+            age_slider = gr.Slider(label='Age', value=0, minimum=0, maximum=1, step=0.01)
         with gr.Row():
             ssim_diff = gr.Slider(label='SSIM threshold', value=0.0, minimum=0.0, maximum=1.0, step=0.01)
             ssim_ccrop = gr.Slider(label='SSIM CenterCrop%', value=0, minimum=0, maximum=100, step=1)
@@ -66,7 +68,7 @@ class Script(scripts.Script):
             save_stats = gr.Checkbox(label='Save extra status information', value=True)
             rm_zero_strength = gr.Checkbox(label='Remove Zero strength tags (causes output instability)', value=False)
 
-        return [steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode, rm_zero_strength]
+       return [steps, video_fps, age_slider, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode, rm_zero_strength]
 
     def get_next_sequence_number(path):
         from pathlib import Path
@@ -85,7 +87,7 @@ class Script(scripts.Script):
                 pass
         return result + 1
 
-    def run(self, p, steps, video_fps, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode, rm_zero_strength):
+     def run(self, p, steps, video_fps, age_slider, show_images, lead_inout, upscale_meth, upscale_ratio, ssim_diff, ssim_ccrop, ssim_diff_min, substep_min, rife_passes, rife_drop, save_stats, mirror_mode, rm_zero_strength):
         re_attention_span = re.compile(r"([\-.\d]+~[\-~.\d]+)", re.X)
 
         def shift_attention(text, distance):
@@ -234,16 +236,20 @@ class Script(scripts.Script):
             regex_zero_strength = re.compile("(\([a-z,A-Z_\s\d\-]*:0(\.0)?\)\s?,?)",re.X)
 
             # Generate the steps
-            for i in range(int(steps) + 1):
-                if state.interrupted:
-                    break
-    
-                distance = float(i / int(steps))
-                p.prompt = shift_attention(prompt, distance)
-                p.negative_prompt = shift_attention(negprompt, distance)
-                p.subseed_strength = distance
-                if not new_cfg_scale is None:
-                    p.cfg_scale = cfg_scale * (1.-distance) + new_cfg_scale * distance
+        for i in range(int(steps) + 1):
+            if state.interrupted:
+                break
+
+            # 年齢をスライダーの値に基づいて変化させる
+            age_value = age_slider * i / int(steps)
+            # 年齢に関する処理（具体的な処理はタスクによって異なる）
+
+            distance = float(i / int(steps))
+            p.prompt = shift_attention(prompt, distance)
+            p.negative_prompt = shift_attention(negprompt, distance)
+            p.subseed_strength = distance
+            if not new_cfg_scale is None:
+                p.cfg_scale = cfg_scale * (1.-distance) + new_cfg_scale * distance
 
                 # remove tag groups with zero strength
                 if rm_zero_strength:
